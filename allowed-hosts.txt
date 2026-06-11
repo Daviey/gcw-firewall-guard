@@ -1,0 +1,7 @@
+# FQDNs allowed through the egress firewall.
+# One domain per line. Lines starting with # are comments.
+# Blank lines are ignored.
+# No wildcards supported (*.example.com will not work).
+
+google.com
+github.com

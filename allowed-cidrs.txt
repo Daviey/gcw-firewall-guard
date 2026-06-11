@@ -1,0 +1,9 @@
+# IP CIDR ranges allowed through the egress firewall.
+# One per line. Lines starting with # are comments.
+# Blank lines are ignored.
+# Use for destinations that have no domain name (peered networks,
+# on-prem ranges, partner APIs with static IPs).
+#
+# Examples:
+# 10.0.0.0/8
+# 203.0.113.0/24
