@@ -1,9 +1,28 @@
 # IP CIDR ranges allowed through the egress firewall.
-# One per line. Lines starting with # are comments.
-# Blank lines are ignored.
+# Format:  <cidr> <ports> [# comment]
+#
+# Ports (required):
+#   *             all TCP ports
+#   443           single port
+#   80,443        comma-separated ports
+#   8000-9000     port range
+#   80,443,8000-9000  combination
+#
+# Exclusions: prefix a CIDR with - to deny traffic to it.
+#   Deny rules get lower priority numbers, so they win over allows.
+#   Use to carve holes out of broader allow ranges.
+#   e.g.  -10.1.0.0/16  *   blocks all traffic to 10.1.0.0/16
+#
+# Lines starting with # are comments. Blank lines are ignored.
+# Inline comments after # are stripped.
+# Lines without a port spec are dropped.
+#
 # Use for destinations that have no domain name (peered networks,
 # on-prem ranges, partner APIs with static IPs).
 #
 # Examples:
-# 10.0.0.0/8
-# 203.0.113.0/24
+# 10.0.0.0/8       *           # Internal corporate network, all ports
+# -10.1.0.0/16     *           # Except this subnet
+# 203.0.113.0/24   443         # Partner API, HTTPS
+# 192.0.2.0/24     80,443      # Legacy service, HTTP+HTTPS
+# 198.51.100.0/24  8000-9000   # App tier, port range

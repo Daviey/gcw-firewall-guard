@@ -16,6 +16,8 @@
 
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [Allow List Format](#allow-list-format)
+- [External Allow Lists](#external-allow-lists)
 - [Test Results](#test-results)
 - [Trade-Offs](#trade-offs)
 - [Security Considerations](#security-considerations)
@@ -63,22 +65,44 @@ tofu plan
 tofu apply
 ```
 
-Customise the allow lists by editing `allowed-hosts.txt` (FQDNs) and `allowed-cidrs.txt` (IP ranges):
+Customise the allow lists by editing `allowed-hosts.txt` (FQDNs) and `allowed-cidrs.txt` (IP ranges). Each line takes the format `<value> <ports> [# comment]`:
 
 ```
 # allowed-hosts.txt
-google.com
-github.com
-api.internal
+#                                  ports
+google.com      *                  # Search engine — all ports
+github.com      443                # Source control — HTTPS only
+api.partner.com 80,443             # Partner API — HTTP + HTTPS
 ```
 
 ```
 # allowed-cidrs.txt
-10.0.0.0/8
-203.0.113.0/24
+#                                  ports
+10.0.0.0/8       *                 # Internal corporate network — all ports
+-10.1.0.0/16     *                 # EXCEPT this subnet (deny, wins over allow)
+203.0.113.0/24   443               # Partner API — HTTPS only
+198.51.100.0/24  8000-9000         # App tier — port range
 ```
 
-Or override at apply time:
+Port specs:
+
+| Format | Meaning |
+|--------|---------|
+| `*` | All TCP ports (0–65535) |
+| `443` | Single port |
+| `80,443` | Comma-separated ports |
+| `8000-9000` | Port range |
+| `80,443,8000-9000` | Combination |
+
+CIDR exclusions: prefix a CIDR with `-` in `allowed-cidrs.txt` to create a deny rule at a lower priority number, so it overrides any broader allow. Use to carve holes out of wide ranges.
+
+Lines without a port spec are silently dropped. Run the linter to catch mistakes:
+
+```bash
+nix-shell -p python3 --run "python3 lint_allowlists.py"
+```
+
+Or override at apply time (note: variable overrides get `*` / all ports; per-entry port specs are only supported in the files):
 
 ```bash
 cd terraform
@@ -89,6 +113,95 @@ tofu apply \
   -var='allowed_fqdns=["google.com","github.com","api.internal"]' \
   -var='allowed_cidrs=["10.0.0.0/8","203.0.113.0/24"]'
 ```
+
+## Allow List Format
+
+Both `allowed-hosts.txt` and `allowed-cidrs.txt` use the same line format:
+
+```
+<value> <ports> [# comment]
+```
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `value` | Yes | FQDN (hosts file) or CIDR range (cidrs file). CIDR file only: prefix with `-` to create a deny (exclusion) rule. |
+| `ports` | Yes | TCP port spec. Lines without it are silently dropped. |
+| `# comment` | No | Inline comment. Everything from `#` onward is stripped. |
+
+### Port Specs
+
+| Format | Meaning |
+|--------|---------|
+| `*` | All TCP ports (0–65535) |
+| `443` | Single port |
+| `80,443` | Comma-separated ports |
+| `8000-9000` | Port range |
+| `80,443,8000-9000` | Combination |
+
+Entries sharing the same port spec are grouped into a single firewall rule. For example, five FQDNs all on port `443` produce one rule; adding an FQDN on `80,443` creates a second rule.
+
+### CIDR Exclusions
+
+In `allowed-cidrs.txt`, prefix a CIDR with `-` to deny traffic to it. Deny rules get lower priority numbers than allow rules, so they always evaluate first:
+
+```
+10.0.0.0/8      *          # Allow all of 10.0.0.0/8
+-10.1.0.0/16    *          # Block 10.1.0.0/16 (wins over the allow above)
+-10.2.0.0/16    443        # Block HTTPS to 10.2.0.0/16 only
+```
+
+This effectively implements "CIDR minus CIDR": allow a broad range, carve out exceptions.
+
+### Linter
+
+Terraform silently drops lines that don't have a port spec, and doesn't validate hostname or CIDR syntax until apply time. The linter catches these early:
+
+```bash
+nix-shell -p python3 --run "python3 lint_allowlists.py"
+```
+
+Checks: missing port specs, invalid hostnames, invalid CIDRs, wildcard hostnames (`*.example.com`), port ranges out of bounds or reversed, duplicate/overlapping ports in a spec, host bits in CIDRs, duplicate entries, orphan CIDR exclusions, redundant overlapping CIDR allows. Exits non-zero on errors.
+
+### External Allow Lists
+
+To maintain allow lists in a separate repository (shared across teams, managed by security, etc.):
+
+**Git submodule (recommended):**
+
+```bash
+# From the repo root:
+git submodule add https://github.com/your-org/allowlists.git external-allowlists
+git submodule update --init --recursive
+```
+
+Then point Terraform at it:
+
+```hcl
+# terraform.tfvars
+allowlist_dir = "external-allowlists"
+```
+
+The path is relative to the `terraform/` directory. The external repo must contain `allowed-hosts.txt` and `allowed-cidrs.txt` in the same format.
+
+**Absolute path:**
+
+```hcl
+allowlist_dir = "/etc/ngfw/allowlists"
+```
+
+**Variable overrides (all ports, no per-entry control):**
+
+Setting `allowed_fqdns` or `allowed_cidrs` takes precedence over both local files and `allowlist_dir`.
+
+To lint external files:
+
+```bash
+nix-shell -p python3 --run "python3 lint_allowlists.py external-allowlists/allowed-hosts.txt external-allowlists/allowed-cidrs.txt"
+```
+
+---
 
 ## Test Results
 
@@ -339,13 +452,16 @@ All rules target the GCW VM service account (`target_service_accounts`). Only wo
 |----------|--------|-------|---------|
 | 998 | ALLOW | `pkg.dev`, `gcr.io` TCP 80,443 | Container image pulls (Artifact Registry / GCR) |
 | 999 | ALLOW | `googleapis.com` TCP 443 | Google API access |
-| 1000 | ALLOW | user-specified FQDNs TCP 443 | Allow list (domains) |
 | 1001 | ALLOW | `0.0.0.0/0` TCP/UDP 53 | DNS resolution |
-| 1002 | ALLOW | user-specified CIDRs TCP 443 | Allow list (IP ranges) |
 | 1050 | ALLOW | `199.36.153.4/30`, `199.36.153.8/30` TCP 80,443 | Google restricted + private VIPs |
 | 1100 | ALLOW | `cloudworkstations.dev` TCP 443,980 | GCW control plane (FQDN) |
 | 1101 | ALLOW | GCW cluster control plane IP TCP 80,443,980 | GCW control plane (internal IP) |
+| 1200+ | ALLOW | user-specified FQDNs TCP (per-entry ports) | Allow list (domains) — one rule per unique port spec |
+| 2000+ | DENY | user-specified CIDR exclusions TCP (per-entry ports) | CIDR deny list — lower priority than allows |
+| 2100+ | ALLOW | user-specified CIDRs TCP (per-entry ports) | Allow list (IP ranges) — one rule per unique port spec |
 | 65534 | DENY | `0.0.0.0/0` all | Default deny |
+
+Rules are grouped by port spec: entries sharing the same port spec (e.g. all `443` entries) become a single firewall rule. CIDR deny rules (`-` prefix) get priority numbers below the CIDR allow rules so exclusions always win.
 
 If the deny rule gets a lower priority number than the allow rules, it evaluates first and blocks everything. The deny rule must always have the highest priority number.
 
@@ -427,15 +543,16 @@ Cloud Workstations require VPC peering to Google-managed services. A `/24` IP ra
 
 ```
 README.md                          This file
-allowed-hosts.txt                  FQDN allow list (one per line, # comments)
-allowed-cidrs.txt                  IP CIDR allow list (one per line, # comments)
+allowed-hosts.txt                  FQDN allow list (value + ports per line, # comments)
+allowed-cidrs.txt                  IP CIDR allow list (value + ports per line, - prefix for exclusions)
+lint_allowlists.py                 Validates allow list syntax (ports, hostnames, CIDRs, exclusions)
 terraform/
   providers.tf                     Provider config: google.host, google.svc, google-beta.svc
-  variables.tf                     Input variables + locals (allowed-hosts.txt parser)
+  variables.tf                     Input variables + locals (allow list parser, port-spec grouping)
   terraform.example.tfvars         Copy to terraform.tfvars and fill in
   main.tf                          API enablement (host + service projects)
   network.tf                       VPC, subnet, Shared VPC, IAM bindings, service networking
-  firewall.tf                      Firewall policy, FQDN rules (SA-targeted), default deny
+  firewall.tf                      Firewall policy, FQDN/CIDR rules (for_each per port spec), default deny
   workstation.tf                   Cluster, config, workstation instance (service project)
   outputs.tf                       VPC name, workstation host, policy name, GCW SA
 ```
@@ -500,10 +617,13 @@ tofu import google_compute_network_firewall_policy_association.vpc_association \
 P="projects/HOST/global/firewallPolicies/fqdn-allow-policy/rules"
 tofu import google_compute_network_firewall_policy_rule.allow_container_registry "$P/998"
 tofu import google_compute_network_firewall_policy_rule.allow_googleapis "$P/999"
-tofu import google_compute_network_firewall_policy_rule.allow_fqdns "$P/1000"
+# FQDN rules use for_each keyed by port spec. Import one per group:
+# tofu import 'google_compute_network_firewall_policy_rule.allow_fqdns["*"]' "$P/1200"
 tofu import google_compute_network_firewall_policy_rule.allow_dns "$P/1001"
-# Only if allowed-cidrs.txt is non-empty:
-tofu import google_compute_network_firewall_policy_rule.allow_cidrs "$P/1002"
+# CIDR deny rules (exclusions) — for_each keyed by port spec:
+# tofu import 'google_compute_network_firewall_policy_rule.deny_cidrs["*"]' "$P/2000"
+# CIDR allow rules — for_each keyed by port spec:
+# tofu import 'google_compute_network_firewall_policy_rule.allow_cidrs["*"]' "$P/2100"
 tofu import google_compute_network_firewall_policy_rule.allow_google_restricted_vip "$P/1050"
 tofu import google_compute_network_firewall_policy_rule.allow_gcw_control_plane "$P/1100"
 tofu import google_compute_network_firewall_policy_rule.allow_gcw_control_plane_ip "$P/1101"
@@ -538,7 +658,7 @@ Import pitfalls to watch for:
 | Shared VPC Attachment | Host | `dave-test-svc` | Service project attached |
 | VPC | Host | `ngfw-test-vpc` | Custom mode, 10.0.0.0/24 |
 | Subnet | Host | `ngfw-test-subnet` | europe-west2, Private Google Access |
-| Firewall Policy | Host | `fqdn-allow-policy` | Global, 8-9 rules (CIDR rule conditional), SA-targeted |
+| Firewall Policy | Host | `fqdn-allow-policy` | Global, dynamic rules (per port-spec groups + CIDR exclusions), SA-targeted |
 | Subnet IAM (Agent SA) | Host | | `compute.networkUser` for GCW Service Agent |
 | Subnet IAM (VM SA) | Host | | `compute.networkUser` for GCW VM Default SA |
 | Project IAM (Agent SA) | Host + Service | | `workstations.serviceAgent` for GCW Service Agent |
@@ -561,6 +681,9 @@ Import pitfalls to watch for:
 
 ```bash
 cd terraform
+# The firewall policy has prevent_destroy enabled. Remove it first:
+tofu state rm google_compute_network_firewall_policy.fqdn_policy
+# Or temporarily comment out the lifecycle block in firewall.tf, then:
 tofu destroy
 ```
 

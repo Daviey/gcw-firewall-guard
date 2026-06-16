@@ -1,46 +1,80 @@
 resource "google_compute_network_firewall_policy" "fqdn_policy" {
   provider    = google.host
   name        = "fqdn-allow-policy"
-  description = "FQDN-based egress allow list with default deny"
+  description = "FQDN/CIDR egress allow list with per-entry ports, CIDR exclusions, and default deny"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   depends_on = [google_project_service.host_compute]
 }
 
+# GCP caps network firewall policies at 256 rules. Fail at plan time before
+# hitting the API limit.
+check "rule_limit" {
+  assert {
+    condition     = local.total_rule_count <= 256
+    error_message = "Firewall policy would have ${local.total_rule_count} rules (GCP max 256). Reduce unique port specs to consolidate."
+  }
+}
+
 resource "google_compute_network_firewall_policy_rule" "allow_fqdns" {
+  for_each                = local.fqdn_groups
   provider                = google.host
   firewall_policy         = google_compute_network_firewall_policy.fqdn_policy.name
-  priority                = 1000
+  priority                = each.value.priority
   action                  = "allow"
   direction               = "EGRESS"
-  description             = "Allow HTTPS to user-specified FQDNs"
+  description             = "Allow egress to user-specified FQDNs (${each.key == "*" ? "all ports" : each.key})"
   target_service_accounts = [local.gcw_vm_sa]
 
   match {
-    dest_fqdns = local.allowed_fqdns
+    dest_fqdns = each.value.fqdns
 
     layer4_configs {
       ip_protocol = "tcp"
-      ports       = ["443"]
+      ports       = each.value.ports
+    }
+  }
+}
+
+resource "google_compute_network_firewall_policy_rule" "deny_cidrs" {
+  for_each                = local.cidr_deny_groups
+  provider                = google.host
+  firewall_policy         = google_compute_network_firewall_policy.fqdn_policy.name
+  priority                = each.value.priority
+  action                  = "deny"
+  direction               = "EGRESS"
+  description             = "Deny egress to excluded IP ranges (${each.key == "*" ? "all ports" : each.key})"
+  target_service_accounts = [local.gcw_vm_sa]
+
+  match {
+    dest_ip_ranges = each.value.cidrs
+
+    layer4_configs {
+      ip_protocol = "tcp"
+      ports       = each.value.ports
     }
   }
 }
 
 resource "google_compute_network_firewall_policy_rule" "allow_cidrs" {
-  count                   = length(local.allowed_cidrs) > 0 ? 1 : 0
+  for_each                = local.cidr_allow_groups
   provider                = google.host
   firewall_policy         = google_compute_network_firewall_policy.fqdn_policy.name
-  priority                = 1002
+  priority                = each.value.priority
   action                  = "allow"
   direction               = "EGRESS"
-  description             = "Allow egress to user-specified IP ranges"
+  description             = "Allow egress to user-specified IP ranges (${each.key == "*" ? "all ports" : each.key})"
   target_service_accounts = [local.gcw_vm_sa]
 
   match {
-    dest_ip_ranges = local.allowed_cidrs
+    dest_ip_ranges = each.value.cidrs
 
     layer4_configs {
       ip_protocol = "tcp"
-      ports       = ["443"]
+      ports       = each.value.ports
     }
   }
 }

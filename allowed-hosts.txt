@@ -1,7 +1,18 @@
 # FQDNs allowed through the egress firewall.
-# One domain per line. Lines starting with # are comments.
-# Blank lines are ignored.
+# Format:  <domain> <ports> [# comment]
+#
+# Ports (required):
+#   *             all TCP ports
+#   443           single port
+#   80,443        comma-separated ports
+#   8000-9000     port range
+#   80,443,8000-9000  combination
+#
+# Lines starting with # are comments. Blank lines are ignored.
+# Inline comments after # are stripped.
 # No wildcards supported (*.example.com will not work).
+# Lines without a port spec are dropped.
 
-google.com
-github.com
+google.com   *                # Search engine, all ports
+github.com   443              # Source control, HTTPS only
+api.partner.com  80,443       # Partner API, HTTP+HTTPS
