@@ -1,0 +1,4 @@
+# This fixture has a line without a port spec — used to test error behaviour
+google.com      *
+bad.example.com
+github.com      443

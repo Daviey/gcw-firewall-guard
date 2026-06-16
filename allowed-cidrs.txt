@@ -15,7 +15,7 @@
 #
 # Lines starting with # are comments. Blank lines are ignored.
 # Inline comments after # are stripped.
-# Lines without a port spec are dropped.
+# Lines with content but no port spec cause a plan-time error.
 #
 # Use for destinations that have no domain name (peered networks,
 # on-prem ranges, partner APIs with static IPs).

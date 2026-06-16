@@ -81,27 +81,36 @@ locals {
   #   ports  = required. "*", "443", "80,443", "8000-9000"
   #            * = all TCP ports
   #            comma-separated for discrete ports, dash for ranges
-  #   Lines without an explicit port spec are dropped.
   #   text after # is stripped as an inline comment
+  #   Lines with content but no port spec cause a plan-time error
+  #   (see check blocks in firewall.tf).
+  fqdn_raw_lines = var.allowed_fqdns != null ? [] : [
+    for line in split("\n", trimspace(file("${local.allowlist_base}/allowed-hosts.txt"))) :
+    trimspace(split("#", line)[0])
+    if trimspace(split("#", line)[0]) != ""
+  ]
+
   fqdn_entries = var.allowed_fqdns != null ? [for v in var.allowed_fqdns : { value = v, ports = "*" }] : [
-    for parts in [
-      for line in split("\n", trimspace(file("${local.allowlist_base}/allowed-hosts.txt"))) :
-      compact(split(" ", trimspace(split("#", line)[0])))
-      if trimspace(split("#", line)[0]) != ""
-    ] :
+    for parts in [for line in local.fqdn_raw_lines : compact(split(" ", line))] :
     { value = parts[0], ports = parts[1] }
     if length(parts) > 1
   ]
 
+  cidr_raw_lines = var.allowed_cidrs != null ? [] : [
+    for line in split("\n", trimspace(file("${local.allowlist_base}/allowed-cidrs.txt"))) :
+    trimspace(split("#", line)[0])
+    if trimspace(split("#", line)[0]) != ""
+  ]
+
   cidr_entries = var.allowed_cidrs != null ? [for v in var.allowed_cidrs : { value = v, ports = "*", deny = false }] : [
-    for parts in [
-      for line in split("\n", trimspace(file("${local.allowlist_base}/allowed-cidrs.txt"))) :
-      compact(split(" ", trimspace(split("#", line)[0])))
-      if trimspace(split("#", line)[0]) != ""
-    ] :
+    for parts in [for line in local.cidr_raw_lines : compact(split(" ", line))] :
     { value = startswith(parts[0], "-") ? substr(parts[0], 1, -1) : parts[0], ports = parts[1], deny = startswith(parts[0], "-") }
     if length(parts) > 1
   ]
+
+  # List of offending lines for error messages (empty if all valid)
+  fqdn_invalid_lines = [for line in local.fqdn_raw_lines : line if length(compact(split(" ", line))) < 2]
+  cidr_invalid_lines = [for line in local.cidr_raw_lines : line if length(compact(split(" ", line))) < 2]
 
   # Group entries by port spec so each unique spec becomes one firewall rule.
   # "*" expands to all TCP ports (0-65535).

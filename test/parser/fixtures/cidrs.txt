@@ -1,0 +1,9 @@
+10.0.0.0/8        *           # corporate, all ports
+-10.1.0.0/16      *           # excluded subnet
+-10.2.0.0/16      443         # excluded HTTPS only
+203.0.113.0/24    443         # partner API
+192.0.2.0/24      80,443      # legacy service
+198.51.100.0/24   8000-9000   # app tier
+
+# dropped (no port spec):
+# 10.99.0.0/16

@@ -19,6 +19,22 @@ check "rule_limit" {
   }
 }
 
+# Every non-comment line in the allow list files must have a port spec.
+# Lines with content but no port spec are an error, not silently dropped.
+check "fqdn_lines_have_ports" {
+  assert {
+    condition     = length(local.fqdn_invalid_lines) == 0
+    error_message = "allowed-hosts.txt has ${length(local.fqdn_invalid_lines)} line(s) missing a port spec. Format: <domain> <ports> [# comment]. Invalid line(s): ${join(" | ", local.fqdn_invalid_lines)}"
+  }
+}
+
+check "cidr_lines_have_ports" {
+  assert {
+    condition     = length(local.cidr_invalid_lines) == 0
+    error_message = "allowed-cidrs.txt has ${length(local.cidr_invalid_lines)} line(s) missing a port spec. Format: <cidr> <ports> [# comment]. Invalid line(s): ${join(" | ", local.cidr_invalid_lines)}"
+  }
+}
+
 resource "google_compute_network_firewall_policy_rule" "allow_fqdns" {
   for_each                = local.fqdn_groups
   provider                = google.host

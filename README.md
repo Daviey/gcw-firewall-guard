@@ -97,7 +97,7 @@ Port specs:
 
 CIDR exclusions: prefix a CIDR with `-` in `allowed-cidrs.txt` to create a deny rule at a lower priority number, so it overrides any broader allow. Use to carve holes out of wide ranges.
 
-Lines without a port spec are silently dropped. Run the linter to catch mistakes:
+Lines without a port spec cause a plan-time error with the offending line content. Run the linter to catch mistakes before planning:
 
 ```bash
 nix-shell -p python3 --run "python3 lint_allowlists.py"
@@ -128,7 +128,7 @@ Both `allowed-hosts.txt` and `allowed-cidrs.txt` use the same line format:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `value` | Yes | FQDN (hosts file) or CIDR range (cidrs file). CIDR file only: prefix with `-` to create a deny (exclusion) rule. |
-| `ports` | Yes | TCP port spec. Lines without it are silently dropped. |
+| `ports` | Yes | TCP port spec. Lines with content but no port spec cause a plan-time error. |
 | `# comment` | No | Inline comment. Everything from `#` onward is stripped. |
 
 ### Port Specs
@@ -568,6 +568,7 @@ README.md                          This file
 allowed-hosts.txt                  FQDN allow list (value + ports per line, # comments)
 allowed-cidrs.txt                  IP CIDR allow list (value + ports per line, - prefix for exclusions)
 lint_allowlists.py                 Validates allow list syntax (ports, hostnames, CIDRs, exclusions)
+test/                              Parser unit tests + invalid-line detection tests
 terraform/
   providers.tf                     Provider config: google.host, google.svc, google-beta.svc
   variables.tf                     Input variables + locals (allow list parser, port-spec grouping)

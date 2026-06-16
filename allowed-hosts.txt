@@ -11,7 +11,7 @@
 # Lines starting with # are comments. Blank lines are ignored.
 # Inline comments after # are stripped.
 # No wildcards supported (*.example.com will not work).
-# Lines without a port spec are dropped.
+# Lines with content but no port spec cause a plan-time error.
 
 google.com   *                # Search engine, all ports
 github.com   443              # Source control, HTTPS only

@@ -1,0 +1,5 @@
+google.com          *                # all ports
+github.com          443              # https only
+api.partner.com     80,443           # http + https
+registry.io         5000,8080-8090   # combination
+internal.corp       *                # internal service
