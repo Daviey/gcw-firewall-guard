@@ -569,15 +569,20 @@ allowed-hosts.txt                  FQDN allow list (value + ports per line, # co
 allowed-cidrs.txt                  IP CIDR allow list (value + ports per line, - prefix for exclusions)
 lint_allowlists.py                 Validates allow list syntax (ports, hostnames, CIDRs, exclusions)
 test/                              Parser unit tests + invalid-line detection tests
+modules/firewall/                  Reusable firewall module (parser, rules, check blocks)
+  versions.tf                      Provider requirements
+  variables.tf                     Module inputs (project, VPC, SAs, allow lists, mode)
+  main.tf                          Firewall policy, all rules, association, validation checks
+  outputs.tf                       Policy name, parsed entries, rule count
 terraform/
   providers.tf                     Provider config: google.host, google.svc, google-beta.svc
-  variables.tf                     Input variables + locals (allow list parser, port-spec grouping)
+  variables.tf                     Root variables + locals (SA computation, allowlist path resolution)
   terraform.example.tfvars         Copy to terraform.tfvars and fill in
   main.tf                          API enablement (host + service projects)
   network.tf                       VPC, subnet, Shared VPC, IAM bindings, service networking
-  firewall.tf                      Firewall policy, FQDN/CIDR rules (for_each per port spec), default deny
+  firewall.tf                      Module call: module "firewall" { source = "../modules/firewall" }
   workstation.tf                   Cluster, config, workstation instance (service project)
-  outputs.tf                       VPC name, workstation host, policy name, GCW SA
+  outputs.tf                       VPC name, workstation host, module outputs
 ```
 
 ### Three Provider Configs

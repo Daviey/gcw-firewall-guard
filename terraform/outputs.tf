@@ -7,34 +7,29 @@ output "workstation_host" {
 }
 
 output "firewall_policy_name" {
-  value = google_compute_network_firewall_policy.fqdn_policy.name
+  value = module.firewall.firewall_policy_name
 }
 
 output "gcw_vm_service_account" {
   value = local.gcw_vm_sa
 }
 
-output "parsed_fqdn_entries" {
-  description = "FQDN entries parsed from allowed-hosts.txt, grouped by the firewall rule they produce."
-  value       = local.fqdn_groups
-}
-
-output "parsed_cidr_allow_entries" {
-  description = "CIDR allow entries parsed from allowed-cidrs.txt, grouped by the firewall rule they produce."
-  value       = local.cidr_allow_groups
-}
-
-output "parsed_cidr_deny_entries" {
-  description = "CIDR exclusion entries parsed from allowed-cidrs.txt (the - prefixed lines)."
-  value       = local.cidr_deny_groups
+output "firewall_mode" {
+  value = module.firewall.firewall_mode
 }
 
 output "firewall_rule_count" {
-  description = "Total firewall rules that will be created (user + infrastructure)."
-  value       = local.total_rule_count
+  value = module.firewall.firewall_rule_count
 }
 
-output "firewall_mode" {
-  description = "Current firewall mode: enforce (default deny active) or audit (all traffic allowed with logging)."
-  value       = var.firewall_mode
+output "parsed_fqdn_entries" {
+  value = module.firewall.parsed_fqdn_entries
+}
+
+output "parsed_cidr_allow_entries" {
+  value = module.firewall.parsed_cidr_allow_entries
+}
+
+output "parsed_cidr_deny_entries" {
+  value = module.firewall.parsed_cidr_deny_entries
 }
