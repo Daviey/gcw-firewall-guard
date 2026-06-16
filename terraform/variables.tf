@@ -34,6 +34,17 @@ variable "region" {
   default     = "europe-west2"
 }
 
+variable "firewall_mode" {
+  description = "Firewall mode: 'enforce' (default deny active, unmatched traffic blocked) or 'audit' (all traffic allowed with logging, use to preview what would be blocked)."
+  type        = string
+  default     = "enforce"
+
+  validation {
+    condition     = contains(["enforce", "audit"], var.firewall_mode)
+    error_message = "firewall_mode must be 'enforce' or 'audit'."
+  }
+}
+
 variable "allowed_fqdns" {
   description = "List of FQDNs to allow for egress (all ports). Defaults to reading from allowed-hosts.txt, which supports per-entry port specs."
   type        = list(string)
@@ -132,5 +143,6 @@ locals {
   # if the allow lists would exceed that after grouping + infra rules.
   # 7 infra rules: container_registry, googleapis, dns, restricted_vip,
   # gcw_control_plane, gcw_control_plane_ip, default_deny.
-  total_rule_count = length(local.fqdn_groups) + length(local.cidr_deny_groups) + length(local.cidr_allow_groups) + 7
+  # +1 for audit_allow_all when in audit mode.
+  total_rule_count = length(local.fqdn_groups) + length(local.cidr_deny_groups) + length(local.cidr_allow_groups) + 7 + (var.firewall_mode == "audit" ? 1 : 0)
 }

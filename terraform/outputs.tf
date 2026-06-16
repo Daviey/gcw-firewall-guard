@@ -33,3 +33,8 @@ output "firewall_rule_count" {
   description = "Total firewall rules that will be created (user + infrastructure)."
   value       = local.total_rule_count
 }
+
+output "firewall_mode" {
+  description = "Current firewall mode: enforce (default deny active) or audit (all traffic allowed with logging)."
+  value       = var.firewall_mode
+}

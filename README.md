@@ -24,6 +24,7 @@
 - [NGFW Tier Comparison](#ngfw-tier-comparison)
 - [Shared VPC](#shared-vpc)
 - [How It Works](#how-it-works)
+- [Audit Mode](#audit-mode)
 - [Prerequisites](#prerequisites)
 - [Implementation Details](#implementation-details)
 - [Resources Created](#resources-created)
@@ -459,11 +460,32 @@ All rules target the GCW VM service account (`target_service_accounts`). Only wo
 | 1200+ | ALLOW | user-specified FQDNs TCP (per-entry ports) | Allow list (domains) — one rule per unique port spec |
 | 2000+ | DENY | user-specified CIDR exclusions TCP (per-entry ports) | CIDR deny list — lower priority than allows |
 | 2100+ | ALLOW | user-specified CIDRs TCP (per-entry ports) | Allow list (IP ranges) — one rule per unique port spec |
+| 65533 | ALLOW | `0.0.0.0/0` all | **Audit mode only** — logs unmatched traffic, lets it through |
 | 65534 | DENY | `0.0.0.0/0` all | Default deny |
 
 Rules are grouped by port spec: entries sharing the same port spec (e.g. all `443` entries) become a single firewall rule. CIDR deny rules (`-` prefix) get priority numbers below the CIDR allow rules so exclusions always win.
 
 If the deny rule gets a lower priority number than the allow rules, it evaluates first and blocks everything. The deny rule must always have the highest priority number.
+
+### Audit Mode
+
+The `firewall_mode` variable controls whether unmatched traffic is blocked or allowed with logging:
+
+| Mode | Behaviour | Use case |
+|------|-----------|----------|
+| `enforce` (default) | Default deny blocks unmatched traffic | Production |
+| `audit` | All traffic allowed; logging enabled on every rule so you can see what would be blocked | Testing before enforcement |
+
+In audit mode, a catch-all allow rule at priority 65533 (just above the default deny at 65534) matches everything the allow rules didn't catch. It logs each connection, then lets it through. The default deny never fires. This lets you observe real traffic patterns before turning on enforcement.
+
+```bash
+# Preview what would be blocked:
+tofu apply -var="firewall_mode=audit"
+
+# Check Cloud Logging for the audit_allow_all rule to see unmatched traffic,
+# then switch to enforcement:
+tofu apply -var="firewall_mode=enforce"
+```
 
 ### DNS Resolution
 

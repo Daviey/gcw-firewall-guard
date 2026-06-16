@@ -28,6 +28,7 @@ resource "google_compute_network_firewall_policy_rule" "allow_fqdns" {
   direction               = "EGRESS"
   description             = "Allow egress to user-specified FQDNs (${each.key == "*" ? "all ports" : each.key})"
   target_service_accounts = [local.gcw_vm_sa]
+  enable_logging          = var.firewall_mode == "audit"
 
   match {
     dest_fqdns = each.value.fqdns
@@ -48,6 +49,7 @@ resource "google_compute_network_firewall_policy_rule" "deny_cidrs" {
   direction               = "EGRESS"
   description             = "Deny egress to excluded IP ranges (${each.key == "*" ? "all ports" : each.key})"
   target_service_accounts = [local.gcw_vm_sa]
+  enable_logging          = var.firewall_mode == "audit"
 
   match {
     dest_ip_ranges = each.value.cidrs
@@ -68,6 +70,7 @@ resource "google_compute_network_firewall_policy_rule" "allow_cidrs" {
   direction               = "EGRESS"
   description             = "Allow egress to user-specified IP ranges (${each.key == "*" ? "all ports" : each.key})"
   target_service_accounts = [local.gcw_vm_sa]
+  enable_logging          = var.firewall_mode == "audit"
 
   match {
     dest_ip_ranges = each.value.cidrs
@@ -201,6 +204,29 @@ resource "google_compute_network_firewall_policy_rule" "allow_gcw_control_plane_
   }
 }
 
+# In audit mode, this catch-all allow sits just above the default deny.
+# It matches everything the allow rules didn't catch, logs it, and lets it
+# through — so you can see what WOULD be blocked without blocking it.
+resource "google_compute_network_firewall_policy_rule" "audit_allow_all" {
+  count                   = var.firewall_mode == "audit" ? 1 : 0
+  provider                = google.host
+  firewall_policy         = google_compute_network_firewall_policy.fqdn_policy.name
+  priority                = 65533
+  action                  = "allow"
+  direction               = "EGRESS"
+  description             = "AUDIT MODE: allowing unmatched traffic with logging. Set firewall_mode=enforce to block."
+  target_service_accounts = [local.gcw_vm_sa]
+  enable_logging          = true
+
+  match {
+    dest_ip_ranges = ["0.0.0.0/0"]
+
+    layer4_configs {
+      ip_protocol = "all"
+    }
+  }
+}
+
 resource "google_compute_network_firewall_policy_rule" "default_deny_egress" {
   provider                = google.host
   firewall_policy         = google_compute_network_firewall_policy.fqdn_policy.name
@@ -209,6 +235,7 @@ resource "google_compute_network_firewall_policy_rule" "default_deny_egress" {
   direction               = "EGRESS"
   description             = "Default deny all egress"
   target_service_accounts = [local.gcw_vm_sa]
+  enable_logging          = var.firewall_mode == "audit"
 
   match {
     dest_ip_ranges = ["0.0.0.0/0"]

@@ -3,6 +3,12 @@ service_project_id  = "YOUR_SERVICE_PROJECT_ID"
 service_project_num = "YOUR_SERVICE_PROJECT_NUMBER"
 region              = "europe-west2"
 
+# Firewall mode:
+#   enforce  = default deny blocks unmatched traffic (default)
+#   audit    = all traffic allowed, logging enabled so you can see what
+#              would be blocked before switching to enforce
+# firewall_mode = "enforce"
+
 # Optional: source allow lists from an external repo (e.g. git submodule).
 # null  = use the built-in allowed-hosts.txt / allowed-cidrs.txt in this repo
 # /abs  = absolute path to a directory containing the files
