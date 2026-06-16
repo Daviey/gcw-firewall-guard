@@ -12,6 +12,11 @@ terraform {
   }
 }
 
+# Three provider configs for the Shared VPC split:
+#   google.host       → host project (VPC, firewall policy, IAM on subnets)
+#   google.svc        → service project (API enablement, workstation IAM)
+#   google-beta.svc   → service project (Workstations API needs google-beta)
+
 provider "google" {
   alias   = "host"
   project = var.host_project_id

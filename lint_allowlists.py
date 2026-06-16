@@ -34,6 +34,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+# RFC 1123 hostname: 1-253 chars total, each label 1-63 chars,
+# alphanumeric + hyphens, labels can't start/end with hyphen.
 _HOSTNAME_RE = re.compile(
     r"^(?=.{1,253}$)"
     r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)"
@@ -236,6 +238,7 @@ def main():
         cidr_allow_specs = set(e["ports"] for e in parsed["cidr"] if not e["deny"])
         cidr_deny_specs = set(e["ports"] for e in parsed["cidr"] if e["deny"])
         user_rules = len(fqdn_specs) + len(cidr_allow_specs) + len(cidr_deny_specs)
+        # Must match the infra rule count in modules/firewall/main.tf
         total = user_rules + 7
         print(f"\n  Rules: {user_rules} user ({len(fqdn_specs)} FQDN, "
               f"{len(cidr_allow_specs)} CIDR allow, {len(cidr_deny_specs)} CIDR deny) "

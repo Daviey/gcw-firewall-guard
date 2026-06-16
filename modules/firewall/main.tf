@@ -41,6 +41,13 @@ locals {
   cidr_invalid_lines = [for line in local.cidr_raw_lines : line if length(compact(split(" ", line))) < 2]
 
   # Group entries by port spec so each unique spec becomes one firewall rule.
+  # Priority scheme:
+  #   900-1101   hardcoded GCW infrastructure dependencies
+  #   1200+      user FQDN allow rules (one per unique port spec)
+  #   2000+      user CIDR deny/exclusion rules (must be lower than allows)
+  #   2100+      user CIDR allow rules
+  #   65533      audit-mode catch-all (only when firewall_mode=audit)
+  #   65534      default deny (must always be the highest number)
   fqdn_groups = {
     for idx, spec in distinct([for e in local.fqdn_entries : e.ports]) :
     spec => {
@@ -169,6 +176,7 @@ resource "google_compute_network_firewall_policy_rule" "allow_cidrs" {
 }
 
 resource "google_compute_network_firewall_policy_rule" "allow_googleapis" {
+  # Required regardless of user allow list — GCW needs Google APIs to function.
   provider                = google
   firewall_policy         = google_compute_network_firewall_policy.this.name
   priority                = 999
@@ -212,6 +220,8 @@ resource "google_compute_network_firewall_policy_rule" "allow_dns" {
 }
 
 resource "google_compute_network_firewall_policy_rule" "allow_google_restricted_vip" {
+  # Google restricted VIP ranges for Private Google Access.
+  # https://cloud.google.com/vpc/docs/configure-private-google-access
   provider                = google
   firewall_policy         = google_compute_network_firewall_policy.this.name
   priority                = 1050
@@ -287,6 +297,9 @@ resource "google_compute_network_firewall_policy_rule" "allow_gcw_control_plane_
   }
 }
 
+# In audit mode, this catch-all allow at 65533 sits just above the default
+# deny (65534). It matches everything the allow rules didn't catch, logs it,
+# and lets it through — so you can see what WOULD be blocked without blocking.
 resource "google_compute_network_firewall_policy_rule" "audit_allow_all" {
   count                   = var.firewall_mode == "audit" ? 1 : 0
   provider                = google

@@ -64,8 +64,13 @@ variable "allowlist_dir" {
 }
 
 locals {
+  # Cloud Workstations creates two Google-managed service accounts per project:
+  #   gcw_vm_sa     — attached to workstation VM instances (target of firewall rules)
+  #   gcw_agent_sa  — manages compute/network resources on your behalf (needs IAM)
   gcw_vm_sa = "service-${var.service_project_num}@gcp-sa-workstationsvm.iam.gserviceaccount.com"
   gcw_agent_sa = "service-${var.service_project_num}@gcp-sa-workstations.iam.gserviceaccount.com"
+  # Control plane IP is allocated by the cluster from the subnet range.
+  # The 10.0.0.7 fallback applies during first plan (before the cluster exists).
   gcw_control_plane_ip = try(google_workstations_workstation_cluster.cluster.control_plane_ip, "10.0.0.7")
 
   # Resolve allowlist path for the module.

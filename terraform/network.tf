@@ -30,6 +30,9 @@ resource "google_compute_shared_vpc_service_project" "svc" {
   depends_on = [google_compute_shared_vpc_host_project.host]
 }
 
+# Subnet IAM: both GCW service accounts need networkUser on the subnet in the
+# host project. The agent SA manages workstation infrastructure; the VM SA is
+# attached to the workstation VMs themselves.
 resource "google_compute_subnetwork_iam_member" "gcw_agent_network_user" {
   provider   = google.host
   project    = var.host_project_id
@@ -48,6 +51,9 @@ resource "google_compute_subnetwork_iam_member" "gcw_vm_network_user" {
   member     = "serviceAccount:${local.gcw_vm_sa}"
 }
 
+# The GCW Service Agent needs workstations.serviceAgent on BOTH the host and
+# service projects. Without the host-project binding, workstation configs enter
+# a degraded state and VMs cannot start or be deleted.
 resource "google_project_iam_binding" "gcw_agent_service_agent_host" {
   project = var.host_project_id
   role    = "roles/workstations.serviceAgent"
@@ -60,6 +66,9 @@ resource "google_project_iam_binding" "gcw_agent_service_agent_svc" {
   members = ["serviceAccount:${local.gcw_agent_sa}"]
 }
 
+# Private Service Connect: allocate a /24 and peer to Google-managed services
+# (required for Cloud Workstations). The name prefix "google-managed-services-"
+# is a GCP naming convention for VPC peering ranges.
 resource "google_compute_global_address" "private_service_access" {
   provider       = google.host
   name          = "google-managed-services-ngfw-test-subnet"

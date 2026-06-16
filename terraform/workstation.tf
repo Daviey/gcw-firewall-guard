@@ -25,10 +25,14 @@ resource "google_workstations_workstation_config" "config" {
     }
   }
 
+  # :latest is intentional for this test environment. Pin a specific digest
+  # for production to ensure reproducible builds.
   container {
     image = "${var.region}-docker.pkg.dev/cloud-workstations-images/predefined/code-oss:latest"
   }
 
+  # reclaim_policy = DELETE destroys the PD when the config is deleted.
+  # Use RETAIN to preserve user data across recreations.
   persistent_directories {
     mount_path = "/home"
     gce_pd {
@@ -39,6 +43,7 @@ resource "google_workstations_workstation_config" "config" {
     }
   }
 
+  # 2-hour idle/running timeouts for cost control in this test environment.
   idle_timeout    = "7200s"
   running_timeout = "7200s"
 }

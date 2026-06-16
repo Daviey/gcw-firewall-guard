@@ -1,5 +1,6 @@
-# Parser test module — exercises the same parsing logic as ../../terraform/variables.tf
-# but without GCP provider dependencies. Run with: tofu plan
+# Parser test module — intentionally duplicates the parsing logic from
+# ../../modules/firewall/main.tf to test it in isolation without GCP provider
+# dependencies. If the module's parsing logic changes, update this to match.
 
 locals {
   allowlist_base = "${path.module}/fixtures"

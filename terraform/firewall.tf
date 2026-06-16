@@ -1,5 +1,7 @@
 module "firewall" {
   source  = "../modules/firewall"
+  # Map the module's default google provider to our host-project alias
+  # so all firewall resources are created in the host project.
   providers = {
     google = google.host
   }
